@@ -20,8 +20,13 @@ struct View {
     size_t currentFrame = 0;
 };
 
-VulkanEngine::VulkanEngine(bool useGlfw) : useGlfw(useGlfw)
+VulkanEngine::VulkanEngine(std::vector<const char*> instanceExtensions)
 {
+    std::set<std::string> extensions = {};
+    for(auto ext : instanceExtensions) {
+        extensions.insert(ext);
+    }
+    
     vkLogger = getLogger("VulkanEngine");
     createInstance();
     setupDebugMessenger();
@@ -43,7 +48,7 @@ void VulkanEngine::init() {
     compileDeviceExtensions();
     pickPhysicalDevice();
     createLogicalDevice();
-    initOutputs();
+    //initOutputs();
     // input createRenderPass();
     // input createGraphicsPipeline();
     // input createFramebuffers();
@@ -60,7 +65,7 @@ void VulkanEngine::shutdown() {
     //vkDestroyBuffer(device, vertexBuffer, nullptr);
     //vkFreeMemory(device, vertexBufferMemory, nullptr);
 
-    for(auto output : outputs) {removeOutput(output);}
+    //for(auto output : outputs) {removeOutput(output);}
 
     vkDestroyDevice(device, nullptr);
 }
@@ -93,7 +98,7 @@ void VulkanEngine::createInstance()
     createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     createInfo.pApplicationInfo = &appInfo;
 
-    auto extensions = getRequiredExtensions();
+    auto extensions = getInstanceExtensions();
     createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
     createInfo.ppEnabledExtensionNames = extensions.data();
 
@@ -183,20 +188,20 @@ void VulkanEngine::compileDeviceExtensions() {
 
     std::set<std::string> extensions;
 
-    for(const auto& ext : engineExtensions)
+    for(const auto& ext : engineInstanceExtensions)
     {
         extensions.insert(ext);
     }
 
     
-    for(const auto& output : outputs)
-    {
-        auto outputExtensions =  output->getRequiredExtensions();
-        for(const auto& ext : outputExtensions)
-        {
-            extensions.insert(ext);
-        }
-    }
+    // for(const auto& output : outputs)
+    // {
+    //     auto outputExtensions =  output->getRequiredExtensions();
+    //     for(const auto& ext : outputExtensions)
+    //     {
+    //         extensions.insert(ext);
+    //     }
+    // }
 
     deviceExtensions = {};
     _deviceExtensions = {};
@@ -216,11 +221,11 @@ void VulkanEngine::createLogicalDevice()
     };
 
     // Gather requested queues from Outputs
-    for(auto output : outputs){
-        for(auto familyIdx : output->getRequiredQueueFamilies(physicalDevice)){
-            requestedQueueFamilies.insert(familyIdx);
-        }
-    }  
+    // for(auto output : outputs){
+    //     for(auto familyIdx : output->getRequiredQueueFamilies(physicalDevice)){
+    //         requestedQueueFamilies.insert(familyIdx);
+    //     }
+    // }  
 
     std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
 
@@ -272,15 +277,15 @@ void VulkanEngine::createLogicalDevice()
 }
 
 void VulkanEngine::initOutputs() {
-    for(auto output : outputs)
-    {
-        auto requested = output->getRequiredQueueFamilies(physicalDevice);
+    // for(auto output : outputs)
+    // {
+    //     auto requested = output->getRequiredQueueFamilies(physicalDevice);
 
-        // which queue in the respective family to use (for now only one queue is created so always 0)
-        std::vector<uint32_t> queueIndicies(requested.size(), 0);
+    //     // which queue in the respective family to use (for now only one queue is created so always 0)
+    //     std::vector<uint32_t> queueIndicies(requested.size(), 0);
 
-        output->init(device, physicalDevice, queueIndicies);
-    }   
+    //     output->init(device, physicalDevice, queueIndicies);
+    // }   
 }
 
 void VulkanEngine::createCommandPool() 
@@ -302,20 +307,20 @@ void VulkanEngine::createVertexBuffer()
 
 }
 
-std::vector<const char *> VulkanEngine::getRequiredExtensions()
+std::vector<const char *> VulkanEngine::getInstanceExtensions()
 {
-    std::vector<const char *> extensions(0);
+    std::vector<const char *> extensions(engineInstanceExtensions.begin(), engineInstanceExtensions.end());
 
-    if(useGlfw) {
-        uint32_t glfwExtensionCount = 0;
-        const char **glfwExtensions;
-        glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+    // if(useGlfw) {
+    //     uint32_t glfwExtensionCount = 0;
+    //     const char **glfwExtensions;
+    //     glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
 
-        for (std::uint32_t i{}; i < glfwExtensionCount; ++i)
-        {
-            extensions.push_back(glfwExtensions[i]);
-        }
-    }
+    //     for (std::uint32_t i{}; i < glfwExtensionCount; ++i)
+    //     {
+    //         extensions.push_back(glfwExtensions[i]);
+    //     }
+    // }
 
     // Validation Layers
     if (enableValidationLayers)
@@ -421,4 +426,15 @@ QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device)
     }
 
     return indices;
+}
+
+void VulkanEngine::requestQueue(queueCondition cond) {
+    queueReqs[cond] = 0;
+}
+
+VkQueue VulkanEngine::getQueue(queueCondition cond) {
+    if(initialized) {
+        return queues[queueReqs[cond]];
+    }
+    return VK_NULL_HANDLE;
 }

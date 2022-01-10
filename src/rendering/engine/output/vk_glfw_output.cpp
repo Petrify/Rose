@@ -3,13 +3,12 @@
 #include <algorithm>
 #include <stdexcept>
 
-VkGlfwOutput::VkGlfwOutput(GLFWwindow* window) : window(window) {}
+VkGlfwOutput::VkGlfwOutput(GLFWwindow* window, VulkanEngine& engine) : window(window), VkOutput(engine) {
+    glfwCreateWindowSurface(engine.vkInstance, window, nullptr, &surface);
+}
 
-VkGlfwOutput::~VkGlfwOutput() {}
-
-void VkGlfwOutput::bind(VkInstance instance) {
-    this->instance = instance;
-    glfwCreateWindowSurface(instance, window, nullptr, &surface);
+VkGlfwOutput::~VkGlfwOutput() {
+    vkDestroySurfaceKHR(engine.vkInstance, surface, nullptr);
 }
 
 void VkGlfwOutput::unbind() {
@@ -31,9 +30,6 @@ void VkGlfwOutput::unbind() {
         device = VK_NULL_HANDLE;
         physicalDevice = VK_NULL_HANDLE;
     }
-
-    vkDestroySurfaceKHR(instance, surface, nullptr);
-    this->instance = VK_NULL_HANDLE;
 }
 
 void VkGlfwOutput::init(VkDevice device, VkPhysicalDevice physicalDevice, std::vector<uint32_t> queueIndicies) {
@@ -163,7 +159,7 @@ bool VkGlfwOutput::checkDeviceRequirements(VkPhysicalDevice device) const
     return true;
 }
 
-const std::vector<std::string> VkGlfwOutput::getRequiredExtensions() const 
+const std::vector<std::string> VkGlfwOutput::getRequiredDeviceExtensions() const 
 {
     auto extensions = std::set<std::string>(requiredExtensions); 
     

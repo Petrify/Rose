@@ -36,9 +36,12 @@ const bool enableValidationLayers = false;
 const bool enableValidationLayers = true;
 #endif
 
+typedef bool(*queueCondition)();
+const std::vector<const char*> engineInstanceExtensions = {}; // Instance extensions required by the Engine
+
 class VulkanEngine
 {
-private:
+public:
 
     // Constants
     // Vulkan validation layers to enable
@@ -65,24 +68,17 @@ private:
     VkDebugUtilsMessengerEXT debugMessenger;  
 
     bool useGlfw;
-
-    // Vulkan device extentions to enable
-    std::vector<std::string> deviceExtensions;
-
-    // stores c_str references to strings in deviceExtensions
-    std::vector<const char*> _deviceExtensions;
-
-    const std::vector<std::string> engineExtensions = {};
+    
+    std::vector<std::string> deviceExtensions; // Vulkan device extentions to enable
+    std::vector<const char*> _deviceExtensions; // stores c_str references to strings in deviceExtensions
     
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     VkDevice device;
 
+    std::map<bool (*)(), uint32_t> queueReqs;
+    std::map<uint32_t, VkQueue> queues;
     QueueFamilyIndices queueIndicies;
     VkQueue graphicsQueue;
-
-    VkRenderPass renderPass;
-    VkPipelineLayout pipelineLayout;
-    VkPipeline graphicsPipeline;
 
     VkCommandPool commandPool;
     std::vector<VkCommandBuffer> commandBuffers;
@@ -90,7 +86,7 @@ private:
     VkBuffer vertexBuffer;
     VkDeviceMemory vertexBufferMemory;
 
-    std::vector<const char *> getRequiredExtensions();
+    std::vector<const char *> getInstanceExtensions();
 
     void createInstance();
     void setupDebugMessenger();
@@ -105,9 +101,7 @@ private:
     uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
     bool isDeviceSuitable(VkPhysicalDevice device);
     void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
-
-public:
-    VulkanEngine(bool useGlfw);
+    VulkanEngine(std::vector<const char*> instanceExtensions);
     ~VulkanEngine();
 
     void init();
@@ -119,6 +113,11 @@ public:
     void addView();
     void removeView();
 
+    void requestDeviceRequirement();
+    void requestDeviceExtension();
+
+    void requestQueue(queueCondition cond);
+    VkQueue getQueue(queueCondition cond);
 };
 
 

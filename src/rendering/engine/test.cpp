@@ -13,11 +13,9 @@ int main() {
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
     auto window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
-    VkGlfwOutput windowOutput(window);
 
     VulkanEngine engine(true);
-
-    engine.addOutput(&windowOutput);
+    VkGlfwOutput windowOutput(window, engine);
     
     try
     {
@@ -39,8 +37,6 @@ int main() {
     }
 
     engine.stop();
-
-    engine.removeOutput(&windowOutput);
 
     engine.shutdown();
 

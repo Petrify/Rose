@@ -10,18 +10,21 @@
 #include "ve_pipeline.hpp"
 #include "vk_queue.hpp"
 #include "vk_swapchain.hpp"
+#include "vk_engine.hpp"
 
 class VkOutput{
 protected:
+    VulkanEngine& engine;
     VkExtent2D extent;
-    VkInstance instance;
     uint32_t frameTimeCap;
 public:
+
+    VkOutput(VulkanEngine& engine) : engine(engine) {}; 
     
     // Pre Init
     virtual bool checkDeviceRequirements(VkPhysicalDevice physicalDevice) const = 0;
-    virtual std::vector<uint32_t> getRequiredQueueFamilies(VkPhysicalDevice physicalDevice) const = 0;
-    virtual const std::vector<std::string> getRequiredExtensions() const = 0;
+    virtual const std::vector<std::string> getRequiredInstanceExtensions() const = 0;
+    virtual const std::vector<std::string> getRequiredDeviceExtensions() const = 0;
 
     virtual void bind(VkInstance instance) = 0;
     virtual void unbind() = 0;
@@ -80,7 +83,7 @@ private:
     void createFramebuffers();
 
 public:
-    VkGlfwOutput(GLFWwindow* window);
+    VkGlfwOutput(GLFWwindow* window, VulkanEngine& engine);
     ~VkGlfwOutput();
 
     void bind(VkInstance instance);
@@ -89,7 +92,7 @@ public:
 
     bool checkDeviceRequirements(VkPhysicalDevice physicalDevice) const;
     std::vector<uint32_t> getRequiredQueueFamilies(VkPhysicalDevice physicalDevice) const;
-    const std::vector<std::string> getRequiredExtensions() const;
+    const std::vector<std::string> getRequiredDeviceExtensions() const;
     
     void aquireNextImage(uint64_t timeout, VkSemaphore semaphore, VkFence fence, uint32_t *pImageIndex);
     void draw();
