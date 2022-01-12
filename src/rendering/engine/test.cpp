@@ -1,8 +1,9 @@
-#include "vk_engine.hpp"
-#include "output/vk_output.hpp"
+#include "include/VulkanEngine.hpp"
 #include <chrono>
 #include <thread>
 
+const uint32_t WIDTH = 800;
+const uint32_t HEIGHT = 600;
 
 int main() {
     initLogging();
@@ -14,7 +15,9 @@ int main() {
 
     auto window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
 
-    VulkanEngine engine(true);
+    auto instanceExt = VkGlfwOutput::getRequiredInstanceExtensions();
+
+    VulkanEngine engine(instanceExt);
     VkGlfwOutput windowOutput(window, engine);
     
     try
@@ -33,12 +36,15 @@ int main() {
 
     while (!glfwWindowShouldClose(window))
     {
+        windowOutput.draw();
         glfwPollEvents();
     }
 
     engine.stop();
 
-    engine.shutdown();
+    windowOutput.destroy();
+
+    engine.detroy();
 
     return EXIT_SUCCESS;
 }

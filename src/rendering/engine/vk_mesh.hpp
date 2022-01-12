@@ -1,21 +1,30 @@
 #pragma once
 
-#include <array>
+#include "ve_types.hpp"
+#include <vector>
 #include <vulkan/vulkan.h>
 #include <glm/glm.hpp>
 
+struct VertexInputDescription {
+
+	std::vector<VkVertexInputBindingDescription> bindings;
+	std::vector<VkVertexInputAttributeDescription> attributes;
+
+	VkPipelineVertexInputStateCreateFlags flags = 0;
+};
+
 struct Vertex
 {
-    glm::vec2 pos;
+    glm::vec3 pos;
+    glm::vec3 normal;
     glm::vec3 color;
 
-    static VkVertexInputBindingDescription getBindingDescription();
-
-    static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions();
+    static VertexInputDescription getVertexDescription();
 };
 
 
 struct Mesh
 {
-    /* data */
+    std::vector<Vertex> vertices;
+	AllocatedBuffer vertexBuffer;
 };

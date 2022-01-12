@@ -1,35 +1,17 @@
 #include "vk_engine.hpp"
+#include "ve_types.hpp"
 
 #include "vk_debug.hpp"
 #include "vk_swapchain.hpp"
 #include "ve_pipeline.hpp"
 
-struct View {
-    std::vector<VkFramebuffer> swapChainFramebuffers;
-    // Rendering
-    VkRenderPass renderPass;
-    VkPipelineLayout pipelineLayout;
-    VkPipeline graphicsPipeline;
-    std::vector<VkCommandBuffer> commandBuffers;
-
-    // Sync
-    std::vector<VkSemaphore> imageAvailableSemaphores;
-    std::vector<VkSemaphore> renderFinishedSemaphores;
-    std::vector<VkFence> inFlightFences;
-    std::vector<VkFence> imagesInFlight;
-    size_t currentFrame = 0;
-};
-
-VulkanEngine::VulkanEngine(std::vector<const char*> instanceExtensions)
+VulkanEngine::VulkanEngine(std::set<std::string> instanceExtensions)
 {
-    std::set<std::string> extensions = {};
-    for(auto ext : instanceExtensions) {
-        extensions.insert(ext);
-    }
-    
     vkLogger = getLogger("VulkanEngine");
+    compileInstanceExtensions(instanceExtensions);
     createInstance();
     setupDebugMessenger();
+    requestQueue([&] (const VkQueueFamilyProperties& prop, uint32_t idx, VkPhysicalDevice device) -> bool {return isGraphicsFamily(prop);}, &graphicsQueueFamily, &graphicsQueue);
 }
 
 VulkanEngine::~VulkanEngine()
@@ -40,6 +22,30 @@ VulkanEngine::~VulkanEngine()
     }
 
     vkDestroyInstance(vkInstance, nullptr);
+    vkLogger->flush();
+}
+
+void VulkanEngine::compileInstanceExtensions(std::set<std::string> external) {
+    // Populate instance Extensions
+    std::set<std::string> extensions = {};
+    for(auto ext : external) {
+        extensions.insert(ext);
+    }
+
+    for(auto ext : engineInstanceExtensions) {
+        extensions.insert(ext);
+    }
+
+    // Validation Layers
+    if (enableValidationLayers)
+    {
+        extensions.insert(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+    }
+
+    for(auto ext : extensions)
+    {
+        instanceExtensions.push_back(ext); 
+    }
 }
 
 void VulkanEngine::init() {
@@ -48,25 +54,29 @@ void VulkanEngine::init() {
     compileDeviceExtensions();
     pickPhysicalDevice();
     createLogicalDevice();
-    //initOutputs();
-    // input createRenderPass();
-    // input createGraphicsPipeline();
-    // input createFramebuffers();
+    createMemoryAllocator();
     createCommandPool();
-    createVertexBuffer(); // TODO:
-    // output createCommandBuffers();
-    // input / output createSyncObjects();
+    loadMeshes();
+
+    for(auto obj : postInitObjects)
+    {
+        obj->init();
+    }
 }
 
-void VulkanEngine::shutdown() {
+void VulkanEngine::detroy() {
 
+    for(auto mesh : meshes)
+    {
+        vmaDestroyBuffer(allocator, mesh.vertexBuffer.buffer, mesh.vertexBuffer.allocation);
+    }
     vkDestroyCommandPool(device, commandPool, nullptr);
 
     //vkDestroyBuffer(device, vertexBuffer, nullptr);
     //vkFreeMemory(device, vertexBufferMemory, nullptr);
 
     //for(auto output : outputs) {removeOutput(output);}
-
+    vmaDestroyAllocator(allocator);
     vkDestroyDevice(device, nullptr);
 }
 
@@ -139,6 +149,19 @@ void VulkanEngine::createInstance()
     }
 }
 
+void VulkanEngine::requestDeviceRequirement(std::function<bool(VkPhysicalDevice)> condition) {
+    deviceReqCallbacks.push_back(condition);
+}
+void VulkanEngine::requestDeviceExtensions(std::set<std::string> extensions) {
+    deviceExtensions.insert(extensions.begin(), extensions.end());
+}
+
+void  VulkanEngine::requestQueue(queueCriteriaFunc criteria, uint32_t* familyIdx, VkQueue* queue) {
+    queueRequirements.push_back(criteria);
+    queues.push_back(queue);
+    queueFamilies.push_back(familyIdx); //just to keep size
+}
+
 void VulkanEngine::setupDebugMessenger()
 {
     if (!enableValidationLayers)
@@ -172,6 +195,7 @@ void VulkanEngine::pickPhysicalDevice()
         vkLogger->debug("Checking device: {}", properties.deviceName);
         if (isDeviceSuitable(device))
         {
+            vkLogger->info("Selected Device: {}", properties.deviceName);
             physicalDevice = device;
             break;
         }
@@ -184,53 +208,25 @@ void VulkanEngine::pickPhysicalDevice()
 }
 
 void VulkanEngine::compileDeviceExtensions() {
-    
-
-    std::set<std::string> extensions;
-
-    for(const auto& ext : engineInstanceExtensions)
+    for(const auto& ext : engineDeviceExtensions)
     {
-        extensions.insert(ext);
-    }
-
-    
-    // for(const auto& output : outputs)
-    // {
-    //     auto outputExtensions =  output->getRequiredExtensions();
-    //     for(const auto& ext : outputExtensions)
-    //     {
-    //         extensions.insert(ext);
-    //     }
-    // }
-
-    deviceExtensions = {};
-    _deviceExtensions = {};
-    for(const auto& ext : extensions)
-    {   
-        deviceExtensions.push_back(std::string(ext));
-        _deviceExtensions.push_back(deviceExtensions.back().c_str()); 
+        deviceExtensions.insert(ext);
     }
 }
 
 void VulkanEngine::createLogicalDevice()
 {
-    queueIndicies = findQueueFamilies(physicalDevice);
-
-    std::set<uint32_t> requestedQueueFamilies = { // Init with Engine Queues
-        queueIndicies.graphicsFamily.value()
-    };
-
-    // Gather requested queues from Outputs
-    // for(auto output : outputs){
-    //     for(auto familyIdx : output->getRequiredQueueFamilies(physicalDevice)){
-    //         requestedQueueFamilies.insert(familyIdx);
-    //     }
-    // }  
+    compileQueueFamilyIndicies();
+    std::set<uint32_t> uniqueQueueFamilies;
+    for(auto familyPtr : queueFamilies)
+    {
+        uniqueQueueFamilies.insert(*familyPtr);
+    }
 
     std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
 
     float queuePriority = 1.0f;
-    for (uint32_t queueFamily : requestedQueueFamilies)
+    for (uint32_t queueFamily : uniqueQueueFamilies)
     {
         VkDeviceQueueCreateInfo queueCreateInfo{};
         queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
@@ -250,8 +246,14 @@ void VulkanEngine::createLogicalDevice()
 
     createInfo.pEnabledFeatures = &deviceFeatures;
 
-    std::vector<const char*> extensions(_deviceExtensions.size());
-    std::copy(_deviceExtensions.begin(), _deviceExtensions.end(), extensions.begin());
+    std::vector<const char*> extensions;
+    extensions.reserve(deviceExtensions.size());
+    for(auto& ext : deviceExtensions)    
+    {
+        vkLogger->debug("Requesting Device Extension: {}", ext);
+        extensions.push_back(ext.data());
+    }
+
     createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
     createInfo.ppEnabledExtensionNames = extensions.data();
 
@@ -272,29 +274,14 @@ void VulkanEngine::createLogicalDevice()
         throw std::runtime_error("failed to create logical device!");
     }
 
-    // Populate device queue handles
-    vkGetDeviceQueue(device, queueIndicies.graphicsFamily.value(), 0, &graphicsQueue);
-}
-
-void VulkanEngine::initOutputs() {
-    // for(auto output : outputs)
-    // {
-    //     auto requested = output->getRequiredQueueFamilies(physicalDevice);
-
-    //     // which queue in the respective family to use (for now only one queue is created so always 0)
-    //     std::vector<uint32_t> queueIndicies(requested.size(), 0);
-
-    //     output->init(device, physicalDevice, queueIndicies);
-    // }   
+    fulfillQueueRequests();
 }
 
 void VulkanEngine::createCommandPool() 
 {
-    QueueFamilyIndices queueFamilyIndices = findQueueFamilies(physicalDevice);
-
     VkCommandPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
+    poolInfo.queueFamilyIndex = graphicsQueueFamily;
     poolInfo.flags = 0; // Optional
 
     if (vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS) {
@@ -309,23 +296,11 @@ void VulkanEngine::createVertexBuffer()
 
 std::vector<const char *> VulkanEngine::getInstanceExtensions()
 {
-    std::vector<const char *> extensions(engineInstanceExtensions.begin(), engineInstanceExtensions.end());
+    std::vector<const char *> extensions;
 
-    // if(useGlfw) {
-    //     uint32_t glfwExtensionCount = 0;
-    //     const char **glfwExtensions;
-    //     glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-
-    //     for (std::uint32_t i{}; i < glfwExtensionCount; ++i)
-    //     {
-    //         extensions.push_back(glfwExtensions[i]);
-    //     }
-    // }
-
-    // Validation Layers
-    if (enableValidationLayers)
-    {
-        extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+    for (auto& ext : instanceExtensions) {
+        extensions.push_back(ext.data());
+        vkLogger->debug("Requesting Instance Extension: {}", ext);
     }
 
     return extensions;
@@ -369,12 +344,17 @@ void VulkanEngine::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSi
 
 bool VulkanEngine::isDeviceSuitable(VkPhysicalDevice device)
 {
-    QueueFamilyIndices indicies = findQueueFamilies(device);
 
-    if (!indicies.isComplete()) {
-        vkLogger->debug("Device does not have necessary queue families");
-        return false;
+    checkQueueCompatibility(device);
+    
+    for(auto func : deviceReqCallbacks)
+    {
+        if (!func(device)) {
+            vkLogger->debug("Device does not fulfill external Requirements");
+            return false;
+        }   
     }
+
     if (!checkDeviceExtensionSupport(device)) {
         vkLogger->debug("Device does not support required extentions");
         return false;
@@ -401,40 +381,137 @@ bool VulkanEngine::checkDeviceExtensionSupport(VkPhysicalDevice device)
     return requiredExtensions.empty();
 }
 
-QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device)
-{
-    QueueFamilyIndices indices;
-
+bool VulkanEngine::checkQueueCompatibility(VkPhysicalDevice device) {
     uint32_t queueFamilyCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
 
     std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
     vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
 
-    uint32_t i = 0;
+    std::vector<bool> familyFound(queues.size(), false);
+    uint32_t familyIdx = 0;
     for (const auto &queueFamily : queueFamilies)
     {
-        if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+        for (size_t reqIdx = 0; reqIdx < queues.size(); reqIdx++)
         {
-            indices.graphicsFamily = i;
+            if (!familyFound[reqIdx] && queueRequirements[reqIdx](queueFamily, familyIdx, device)) {
+                familyFound[reqIdx] = true;
+            }
         }
-
-        if (indices.isComplete())
-            break;
-
-        i++;
+        familyIdx++;
     }
 
-    return indices;
-}
-
-void VulkanEngine::requestQueue(queueCondition cond) {
-    queueReqs[cond] = 0;
-}
-
-VkQueue VulkanEngine::getQueue(queueCondition cond) {
-    if(initialized) {
-        return queues[queueReqs[cond]];
+    for(auto& b : familyFound)
+    {
+        if(!b) {return false;}
     }
-    return VK_NULL_HANDLE;
+
+    return true;
 }
+
+void VulkanEngine::compileQueueFamilyIndicies() {
+    uint32_t queueFamilyCount = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
+
+    std::vector<VkQueueFamilyProperties> deviceQueueFamilies(queueFamilyCount);
+    vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, deviceQueueFamilies.data());
+
+    std::vector<bool> familyFound(queues.size(), false);
+    uint32_t familyIdx = 0;
+    for (const auto &queueFamily : deviceQueueFamilies)
+    {
+        for (size_t reqIdx = 0; reqIdx < queues.size(); reqIdx++)
+        {
+            if (!familyFound[reqIdx] && queueRequirements[reqIdx](queueFamily, familyIdx, physicalDevice)) {
+                familyFound[reqIdx] = true;
+                *queueFamilies[reqIdx] = familyIdx;
+            }
+        }
+        familyIdx++;
+    }
+}
+
+void VulkanEngine::fulfillQueueRequests() {
+    for (size_t queueIdx = 0; queueIdx < queues.size(); queueIdx++)
+    {
+        vkGetDeviceQueue(device, *queueFamilies[queueIdx], 0, queues[queueIdx]);
+    }
+}
+
+void VulkanEngine::requestPostInitialization(Initializable* obj) {
+    postInitObjects.push_back(obj);
+}
+
+bool VulkanEngine::isInit() {
+    return initialized;
+}
+
+void VulkanEngine::createMemoryAllocator() {
+    VmaAllocatorCreateInfo allocatorInfo = {};
+    allocatorInfo.physicalDevice = physicalDevice;
+    allocatorInfo.device = device;
+    allocatorInfo.instance = vkInstance;
+    vmaCreateAllocator(&allocatorInfo, &allocator);
+}
+
+void VulkanEngine::loadMeshes() {
+    meshes.push_back(Mesh());
+    Mesh& triangleMesh = meshes.back();
+    triangleMesh.vertices.resize(6);
+
+	//vertex positions
+	triangleMesh.vertices[0].pos = { 0.5f, 0.5f, 0.0f };
+	triangleMesh.vertices[1].pos = {-0.5f, 0.5f, 0.0f };
+	triangleMesh.vertices[2].pos = {0.f, -1.0f, 0.0f };
+    triangleMesh.vertices[3].pos = {-0.5f, 0.5f, 0.0f };
+	triangleMesh.vertices[4].pos = {0.f, -1.0f, 0.0f };
+	triangleMesh.vertices[5].pos = {1.0f, -1.0f, 0.0f };
+
+	//vertex colors, all green
+	triangleMesh.vertices[0].color = { 1.f, 0.f, 0.0f }; //pure green
+	triangleMesh.vertices[1].color = { 0.f, 1.f, 0.0f }; //pure green
+	triangleMesh.vertices[2].color = { 0.f, 0.f, 1.0f }; //pure green
+    triangleMesh.vertices[3].color = { 1.f, 0.f, 0.0f }; //pure green
+	triangleMesh.vertices[4].color = { 0.f, 1.f, 0.0f }; //pure green
+	triangleMesh.vertices[5].color = { 0.f, 0.f, 1.0f }; //pure green
+
+    uploadMesh(triangleMesh);
+}
+
+void VulkanEngine::uploadMesh(Mesh& mesh)
+{
+	//allocate vertex buffer
+	VkBufferCreateInfo bufferInfo = {};
+	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	//this is the total size, in bytes, of the buffer we are allocating
+	bufferInfo.size = mesh.vertices.size() * sizeof(Vertex);
+	//this buffer is going to be used as a Vertex Buffer
+	bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+
+    vkLogger->debug("Allocating buffer: {} Verticies ({} bytes)", mesh.vertices.size(), bufferInfo.size);
+
+	//let the VMA library know that this data should be writeable by CPU, but also readable by GPU
+	VmaAllocationCreateInfo vmaallocInfo = {};
+	vmaallocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+
+	//allocate the buffer
+	auto result = (vmaCreateBuffer(allocator, &bufferInfo, &vmaallocInfo,
+		&mesh.vertexBuffer.buffer,
+		&mesh.vertexBuffer.allocation,
+		nullptr));
+    
+    if(result != VK_SUCCESS) {}
+
+    //copy vertex data
+	void* data;
+	vmaMapMemory(allocator, mesh.vertexBuffer.allocation, &data);
+
+	memcpy(data, mesh.vertices.data(), mesh.vertices.size() * sizeof(Vertex));
+
+	vmaUnmapMemory(allocator, mesh.vertexBuffer.allocation);
+}
+
+bool isGraphicsFamily(const VkQueueFamilyProperties& prop) {
+    return prop.queueFlags & VK_QUEUE_GRAPHICS_BIT;
+}
+

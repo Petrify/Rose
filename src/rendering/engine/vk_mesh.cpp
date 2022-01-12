@@ -1,25 +1,40 @@
 #include "vk_mesh.hpp"
+#include <vector>
 
-VkVertexInputBindingDescription Vertex::getBindingDescription() {
-    VkVertexInputBindingDescription bindingDescription{};
-    bindingDescription.binding = 0; // start at fisrt byte
-    bindingDescription.stride = sizeof(Vertex); // each vertex  
-    bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+VertexInputDescription Vertex::getVertexDescription() {
+    VertexInputDescription description;
 
-    return bindingDescription;
-}
+	//we will have just 1 vertex buffer binding, with a per-vertex rate
+	VkVertexInputBindingDescription mainBinding = {};
+	mainBinding.binding = 0;
+	mainBinding.stride = sizeof(Vertex);
+	mainBinding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
-std::array<VkVertexInputAttributeDescription, 2> Vertex::getAttributeDescriptions() {
-    std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
-    attributeDescriptions[0].binding = 0;
-    attributeDescriptions[0].location = 0;
-    attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
-    attributeDescriptions[0].offset = offsetof(Vertex, pos);
+	description.bindings.push_back(mainBinding);
 
-    attributeDescriptions[1].binding = 0;
-    attributeDescriptions[1].location = 1;
-    attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-    attributeDescriptions[1].offset = offsetof(Vertex, color);
+	//Position will be stored at Location 0
+	VkVertexInputAttributeDescription posAttribute = {};
+	posAttribute.binding = 0;
+	posAttribute.location = 0;
+	posAttribute.format = VK_FORMAT_R32G32B32_SFLOAT;
+	posAttribute.offset = offsetof(Vertex, pos);
 
-    return attributeDescriptions;
+	 //Normal will be stored at Location 1
+	VkVertexInputAttributeDescription normalAttribute = {};
+	normalAttribute.binding = 0;
+	normalAttribute.location = 1;
+	normalAttribute.format = VK_FORMAT_R32G32B32_SFLOAT;
+	normalAttribute.offset = offsetof(Vertex, normal);
+
+	//Color will be stored at Location 2
+	VkVertexInputAttributeDescription colorAttribute = {};
+	colorAttribute.binding = 0;
+	colorAttribute.location = 2;
+	colorAttribute.format = VK_FORMAT_R32G32B32_SFLOAT;
+	colorAttribute.offset = offsetof(Vertex, color);
+
+	description.attributes.push_back(posAttribute);
+	description.attributes.push_back(normalAttribute);
+	description.attributes.push_back(colorAttribute);
+	return description;
 }

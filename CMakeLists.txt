@@ -31,7 +31,6 @@ add_library(VulkanEngine
     src/logging/logging.cpp
     src/rendering/engine/vk_engine.cpp
     src/rendering/engine/vk_mesh.cpp
-    src/rendering/engine/vk_queue.hpp
     src/rendering/engine/vk_debug.cpp
     src/rendering/engine/vk_swapchain.cpp
     src/rendering/engine/ve_pipeline.cpp
@@ -64,9 +63,9 @@ target_link_libraries(TestVulkanEngine
     PRIVATE glfw 
 )
 
-add_shaders(TestVulkanEngine
-    triangle.vert
+add_shaders(VulkanEngine
     triangle.frag
+    basic_mesh.vert
 )
 
 # Add Executable File as Build target 
