@@ -37,11 +37,6 @@ const std::vector<const char*> engineDeviceExtensions = {}; // Device extensions
 
 typedef std::function<bool(const VkQueueFamilyProperties&, uint32_t, VkPhysicalDevice)> queueCriteriaFunc;
 
-class Initializable {
-    public:
-    virtual void init() = 0;
-};
-
 class VulkanEngine
 {
 public:
@@ -99,6 +94,7 @@ public:
     void createCommandPool();
     void createVertexBuffer();
     void createMemoryAllocator();
+    
     void loadMeshes();
     void uploadMesh(Mesh& mesh);
     

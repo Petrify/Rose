@@ -4,6 +4,7 @@
 #include <vector>
 #include <vulkan/vulkan.h>
 #include <glm/glm.hpp>
+#include <string>
 
 struct VertexInputDescription {
 
@@ -27,4 +28,7 @@ struct Mesh
 {
     std::vector<Vertex> vertices;
 	AllocatedBuffer vertexBuffer;
+
+    Mesh();
+    Mesh(std::string path);
 };

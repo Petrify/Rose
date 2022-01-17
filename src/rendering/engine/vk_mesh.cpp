@@ -1,5 +1,7 @@
 #include "vk_mesh.hpp"
 #include <vector>
+#include "ve_loader.hpp"
+#include <assimp/mesh.h>
 
 VertexInputDescription Vertex::getVertexDescription() {
     VertexInputDescription description;
@@ -37,4 +39,27 @@ VertexInputDescription Vertex::getVertexDescription() {
 	description.attributes.push_back(normalAttribute);
 	description.attributes.push_back(colorAttribute);
 	return description;
+}
+
+Mesh::Mesh(std::string path) {
+    const aiScene* mesh = importer.ReadFile(path, 0);
+}
+
+Mesh::Mesh() {
+    vertices.resize(6);
+
+	//vertex positions
+	vertices[0].pos = { 0.5f, 0.5f, 0.0f };
+	vertices[1].pos = {-0.5f, 0.5f, 0.0f };
+	vertices[2].pos = {0.f, -1.0f, 0.0f };
+    vertices[3].pos = {-0.5f, 0.5f, 0.0f };
+	vertices[4].pos = {0.f, -1.0f, 0.0f };
+	vertices[5].pos = {1.0f, -1.0f, 0.0f };
+
+	vertices[0].color = { 1.f, 0.f, 0.0f }; 
+	vertices[1].color = { 0.f, 1.f, 0.0f }; 
+	vertices[2].color = { 0.f, 0.f, 1.0f }; 
+    vertices[3].color = { 1.f, 0.f, 0.0f }; 
+	vertices[4].color = { 0.f, 1.f, 0.0f }; 
+	vertices[5].color = { 0.f, 0.f, 1.0f }; 
 }

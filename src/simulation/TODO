@@ -1,0 +1,5 @@
+Refactor Worlds to be DLL Plugins
+Refactor Rules to be DLL Plugins which depend on specific Worlds
+Refactor Actors to be DLL Plugins depending on specific Worlds
+Refactor Commands to be defined by Rules and Worlds
+Refactor Outputs to be defined by Commands

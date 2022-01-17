@@ -3,13 +3,19 @@
   "version-string": "0.1.0",
   "builtin-baseline": "2169ab765b49cfc5cd7eddfc8ff3e579326776f8",
   "dependencies": [
-    "vulkan",
-    "glm",
     "glfw3",
-    "spdlog",
-    "bullet3",
-    "slikenet",
+
+    "vulkan",
     "vulkan-memory-allocator",
+    "glm",
+    "assimp",
+
+    "bullet3",
+
+    "spdlog", 
+
+    "slikenet",
+    
     {
       "name": "imgui",
       "features": [ "glfw-binding" ]

@@ -455,25 +455,9 @@ void VulkanEngine::createMemoryAllocator() {
 }
 
 void VulkanEngine::loadMeshes() {
-    meshes.push_back(Mesh());
+    meshes.push_back(Mesh(""));
     Mesh& triangleMesh = meshes.back();
     triangleMesh.vertices.resize(6);
-
-	//vertex positions
-	triangleMesh.vertices[0].pos = { 0.5f, 0.5f, 0.0f };
-	triangleMesh.vertices[1].pos = {-0.5f, 0.5f, 0.0f };
-	triangleMesh.vertices[2].pos = {0.f, -1.0f, 0.0f };
-    triangleMesh.vertices[3].pos = {-0.5f, 0.5f, 0.0f };
-	triangleMesh.vertices[4].pos = {0.f, -1.0f, 0.0f };
-	triangleMesh.vertices[5].pos = {1.0f, -1.0f, 0.0f };
-
-	//vertex colors, all green
-	triangleMesh.vertices[0].color = { 1.f, 0.f, 0.0f }; //pure green
-	triangleMesh.vertices[1].color = { 0.f, 1.f, 0.0f }; //pure green
-	triangleMesh.vertices[2].color = { 0.f, 0.f, 1.0f }; //pure green
-    triangleMesh.vertices[3].color = { 1.f, 0.f, 0.0f }; //pure green
-	triangleMesh.vertices[4].color = { 0.f, 1.f, 0.0f }; //pure green
-	triangleMesh.vertices[5].color = { 0.f, 0.f, 1.0f }; //pure green
 
     uploadMesh(triangleMesh);
 }
@@ -488,7 +472,7 @@ void VulkanEngine::uploadMesh(Mesh& mesh)
 	//this buffer is going to be used as a Vertex Buffer
 	bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
 
-    vkLogger->debug("Allocating buffer: {} Verticies ({} bytes)", mesh.vertices.size(), bufferInfo.size);
+    vkLogger->debug("Allocating Vertex buffer: {} Verticies ({} bytes)", mesh.vertices.size(), bufferInfo.size);
 
 	//let the VMA library know that this data should be writeable by CPU, but also readable by GPU
 	VmaAllocationCreateInfo vmaallocInfo = {};

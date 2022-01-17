@@ -24,6 +24,10 @@ find_package(spdlog CONFIG REQUIRED)
 find_package(Bullet CONFIG REQUIRED)
 find_package(unofficial-vulkan-memory-allocator CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
+find_package(assimp CONFIG REQUIRED)
+
+add_subdirectory(assets)
+add_subdirectory(src/rendering/engine)
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/src/rendering/shaders/compile_shaders.cmake)
 
@@ -36,34 +40,37 @@ add_library(VulkanEngine
     src/rendering/engine/ve_pipeline.cpp
     src/rendering/engine/output/vk_output.hpp
     src/rendering/engine/output/vk_glfw_output.cpp
+    src/rendering/engine/ve_loader.hpp
+    src/rendering/engine/models.cpp
 )
 
 target_link_libraries(VulkanEngine
-    PUBLIC Vulkan::Vulkan 
-    PRIVATE unofficial::vulkan-memory-allocator::vulkan-memory-allocator 
-    PRIVATE glm::glm
-    PRIVATE glfw
-    PRIVATE spdlog::spdlog spdlog::spdlog_header_only
+PUBLIC Vulkan::Vulkan 
+PRIVATE unofficial::vulkan-memory-allocator::vulkan-memory-allocator 
+PRIVATE glm::glm
+PRIVATE glfw
+PRIVATE spdlog::spdlog spdlog::spdlog_header_only
+PRIVATE assimp::assimp
 )
 
 target_include_directories(VulkanEngine
-    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src
-    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/rendering/engine
+PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src
+PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/rendering/engine
 )
 
 add_executable(TestVulkanEngine
-    src/rendering/engine/test.cpp
-    src/logging/logging.cpp
+src/rendering/engine/test.cpp
+src/logging/logging.cpp
 )
 
 target_link_libraries(TestVulkanEngine
-    PRIVATE spdlog::spdlog spdlog::spdlog_header_only
-    PRIVATE VulkanEngine
-    PRIVATE Vulkan::Vulkan 
-    PRIVATE glfw 
+PRIVATE spdlog::spdlog spdlog::spdlog_header_only
+PRIVATE VulkanEngine
+PRIVATE Vulkan::Vulkan 
+PRIVATE glfw 
 )
 
-add_shaders(VulkanEngine
+add_shaders(TestVulkanEngine
     triangle.frag
     basic_mesh.vert
 )
