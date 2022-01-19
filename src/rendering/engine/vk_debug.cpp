@@ -1,5 +1,5 @@
 #include "vk_debug.hpp"
-#include "logging/logging.hpp"
+#include <RoseLogging.hpp>
 
 VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo, const VkAllocationCallbacks *pAllocator, VkDebugUtilsMessengerEXT *pDebugMessenger)
 {

@@ -1,4 +1,4 @@
-#include "logging.hpp"
+#include "inc/RoseLogging.hpp"
 
 #include <spdlog/spdlog.h>
 #include <spdlog/async.h>

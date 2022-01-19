@@ -11,6 +11,11 @@
 #include "vk_swapchain.hpp"
 #include "vk_engine.hpp"
 
+struct MeshPushConstants {
+	glm::vec4 offset = glm::vec4();
+	glm::mat4 render_matrix = glm::mat4();
+};
+
 class VkOutput : public Initializable {
 protected:
     VulkanEngine& engine;
@@ -28,6 +33,11 @@ public:
 };
 
 class VkGlfwOutput : public virtual VkOutput {
+public:
+    ImGui_ImplVulkanH_Window imguiWindow;
+    MeshPushConstants pushConstants;
+    View view;
+
 private:
 
     bool isInit = false;
@@ -46,8 +56,6 @@ private:
     std::vector<VkFramebuffer> framebuffers;
     VkFormat imageFormat;
 
-    View view;
-
     std::vector<uint32_t> queueFamilyIndicies;
     std::vector<VkQueue> queues;
 
@@ -55,6 +63,10 @@ private:
     VkQueue graphicsQueue;
     uint32_t presentQueueFamily;
     uint32_t graphicsQueueFamily;
+
+	VkFormat depthFormat;
+	AllocatedImage depthImage;
+    VkImageView depthImageView;
 
     std::vector<VkCommandBuffer> commandBuffers;
 
@@ -76,6 +88,7 @@ private:
     void createFramebuffers();
     void createCommandBuffers();
     void createSyncObjects();
+    void initImgui();
 
     void updateExtent();
 
@@ -99,5 +112,8 @@ public:
 
     View* newView();
     void destroyView(View& v);
+
+    void beginImguiFrame();
+    void endImguiFrame();
 };
 

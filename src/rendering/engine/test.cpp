@@ -1,4 +1,4 @@
-#include "include/VulkanEngine.hpp"
+#include "VulkanEngine.hpp"
 #include <chrono>
 #include <thread>
 
@@ -44,7 +44,7 @@ int main() {
 
     windowOutput.destroy();
 
-    engine.detroy();
+    engine.destroy();
 
     return EXIT_SUCCESS;
 }

@@ -28,6 +28,8 @@ VkPipeline PipelineBuilder::buildPipeline(VkDevice device, VkRenderPass renderPa
     pipelineInfo.basePipelineHandle = VK_NULL_HANDLE; // Optional
     pipelineInfo.basePipelineIndex = -1; // Optional
 
+    pipelineInfo.pDepthStencilState = &depthStencil;
+
     VkPipeline pipeline;
     if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline) != VK_SUCCESS) {
         throw std::runtime_error("failed to create graphics pipeline!");
@@ -43,13 +45,6 @@ void PipelineBuilder::initBasic() {
     // Input
     vertexInputInfo = VkPipelineVertexInputStateCreateInfo {};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    //auto bindingDescription = _Vertex::getBindingDescription();
-    //auto attributeDescriptions = _Vertex::getAttributeDescriptions();
-
-    //vertexInputInfo.vertexBindingDescriptionCount = 1;
-    //vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
-    //vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-    //vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
     // Input assembly
     inputAssembly = VkPipelineInputAssemblyStateCreateInfo {};
@@ -119,6 +114,17 @@ void PipelineBuilder::initBasic() {
     colorBlending.blendConstants[1] = 0.0f; // Optional
     colorBlending.blendConstants[2] = 0.0f; // Optional
     colorBlending.blendConstants[3] = 0.0f; // Optional
+
+    depthStencil = {};
+    depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depthStencil.pNext = nullptr;
+    depthStencil.depthTestEnable = VK_TRUE;
+    depthStencil.depthWriteEnable = VK_TRUE;
+    depthStencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+    depthStencil.depthBoundsTestEnable = VK_FALSE;
+    depthStencil.minDepthBounds = 0.0f; // Optional
+    depthStencil.maxDepthBounds = 1.0f; // Optional
+    depthStencil.stencilTestEnable = VK_FALSE;
 }
 
 VkShaderModule loadCompiledShader(const std::string &filename, VkDevice device)

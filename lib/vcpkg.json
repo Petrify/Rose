@@ -4,6 +4,7 @@
   "builtin-baseline": "2169ab765b49cfc5cd7eddfc8ff3e579326776f8",
   "dependencies": [
     "glfw3",
+    "nativefiledialog",
 
     "vulkan",
     "vulkan-memory-allocator",
@@ -18,7 +19,7 @@
     
     {
       "name": "imgui",
-      "features": [ "glfw-binding" ]
+      "features": [ "glfw-binding", "vulkan-binding" ]
     }
   ],
   "overrides": []

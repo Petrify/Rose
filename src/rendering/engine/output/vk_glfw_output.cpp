@@ -1,6 +1,8 @@
 #include "vk_output.hpp"
 #include "ve_view.hpp"
 
+#include <glm/gtx/transform.hpp>
+
 #include <algorithm>
 #include <stdexcept>
 
@@ -9,16 +11,17 @@ const int MAX_FRAMES_IN_FLIGHT = 2;
 VkGlfwOutput::VkGlfwOutput(GLFWwindow* window, VulkanEngine& engine) : window(window), VkOutput(engine) {
     glfwCreateWindowSurface(engine.vkInstance, window, nullptr, &surface);
     registerRequirements();
-    if (engine.isInit()) {
-        engine.requestPostInitialization(this);
+    if (!engine.isInit()) {
+        engine.requestPostInitialization(this);   
     } else {
         init();
     }
 }
 
 void VkGlfwOutput::destroy() {
-    if(isInit) {
-
+  
+    if (isInit)
+    {
         for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
             vkDestroySemaphore(engine.device, renderFinishedSemaphores[i], nullptr);
             vkDestroySemaphore(engine.device, imageAvailableSemaphores[i], nullptr);
@@ -30,19 +33,20 @@ void VkGlfwOutput::destroy() {
         }
         
         destroyView(view);
-
+        vkDestroyImageView(engine.device, depthImageView, nullptr);
+        vmaDestroyImage(engine.allocator, depthImage._image, depthImage._allocation);
         vkDestroySwapchainKHR(engine.device, swapChain, nullptr);
 
         for(auto imageView : swapChainImageViews)
         {
             vkDestroyImageView(engine.device, imageView, nullptr);
         }
-    }
+     }   
     vkDestroySurfaceKHR(engine.vkInstance, surface, nullptr);
 }
 
 VkGlfwOutput::~VkGlfwOutput() {
-
+    
 }
 
 const std::set<std::string> VkGlfwOutput::getRequiredInstanceExtensions() {
@@ -72,6 +76,7 @@ void VkGlfwOutput::init() {
     createFramebuffers();
     createCommandBuffers();
     createSyncObjects();
+    initImgui();
     
     isInit = true;
 }
@@ -164,6 +169,56 @@ void VkGlfwOutput::createSwapChain()
     vkGetSwapchainImagesKHR(engine.device, swapChain, &imageCount, swapChainImages.data());
 
     imageFormat = surfaceFormat.format;
+
+    VkExtent3D depthImageExtent = {
+        extent.width,
+        extent.height,
+        1
+    };
+
+    //hardcoding the depth format to 32 bit float
+	depthFormat = VK_FORMAT_D32_SFLOAT;
+
+	//the depth image will be an image with the format we selected and Depth Attachment usage flag
+	VkImageCreateInfo dimg_info = {};
+
+    dimg_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    dimg_info.pNext = nullptr;
+
+    dimg_info.imageType = VK_IMAGE_TYPE_2D;
+
+    dimg_info.format = depthFormat;
+    dimg_info.extent = depthImageExtent;
+
+    dimg_info.mipLevels = 1;
+    dimg_info.arrayLayers = 1;
+    dimg_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    dimg_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    dimg_info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+
+	//for the depth image, we want to allocate it from GPU local memory
+	VmaAllocationCreateInfo dimg_allocinfo = {};
+	dimg_allocinfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+	dimg_allocinfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+	//allocate and create the image
+	vmaCreateImage(engine.allocator, &dimg_info, &dimg_allocinfo, &depthImage._image, &depthImage._allocation, nullptr);
+
+	//build an image-view for the depth image to use for rendering
+	VkImageViewCreateInfo dview_info = {};
+    dview_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	dview_info.pNext = nullptr;
+
+	dview_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	dview_info.image = depthImage._image;
+	dview_info.format = depthFormat;
+	dview_info.subresourceRange.baseMipLevel = 0;
+	dview_info.subresourceRange.levelCount = 1;
+	dview_info.subresourceRange.baseArrayLayer = 0;
+	dview_info.subresourceRange.layerCount = 1;
+	dview_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+
+	vkCreateImageView(engine.device, &dview_info, nullptr, &depthImageView);
 }
 
 bool VkGlfwOutput::checkDeviceRequirements(VkPhysicalDevice device) const 
@@ -191,6 +246,22 @@ void VkGlfwOutput::createRenderPass(View& view)
     colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
+    VkAttachmentDescription depth_attachment = {};
+    // Depth attachment
+    depth_attachment.flags = 0;
+    depth_attachment.format = depthFormat;
+    depth_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    depth_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    depth_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    depth_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    depth_attachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+    VkAttachmentReference depth_attachment_ref = {};
+    depth_attachment_ref.attachment = 1;
+    depth_attachment_ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
     VkAttachmentReference colorAttachmentRef{};
     colorAttachmentRef.attachment = 0;
     colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -199,6 +270,7 @@ void VkGlfwOutput::createRenderPass(View& view)
     subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
     subpass.colorAttachmentCount = 1;
     subpass.pColorAttachments = &colorAttachmentRef;
+    subpass.pDepthStencilAttachment = &depth_attachment_ref;
 
     VkSubpassDependency dependency{};
     dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
@@ -208,14 +280,26 @@ void VkGlfwOutput::createRenderPass(View& view)
     dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
+    VkSubpassDependency depth_dependency = {};
+    depth_dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+    depth_dependency.dstSubpass = 0;
+    depth_dependency.srcStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+    depth_dependency.srcAccessMask = 0;
+    depth_dependency.dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+    depth_dependency.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+
+    VkSubpassDependency dependencies[2] = { dependency, depth_dependency };
+
+    VkAttachmentDescription attachments[2] = { colorAttachment,depth_attachment };
+
     VkRenderPassCreateInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    renderPassInfo.attachmentCount = 1;
-    renderPassInfo.pAttachments = &colorAttachment;
+    renderPassInfo.attachmentCount = 2;
+    renderPassInfo.pAttachments = attachments;
     renderPassInfo.subpassCount = 1;
     renderPassInfo.pSubpasses = &subpass;
-    renderPassInfo.dependencyCount = 1;
-    renderPassInfo.pDependencies = &dependency;
+    renderPassInfo.dependencyCount = 2;
+    renderPassInfo.pDependencies = dependencies;
 
     if (vkCreateRenderPass(engine.device, &renderPassInfo, nullptr, &view.renderPass) != VK_SUCCESS)
     {
@@ -268,13 +352,18 @@ void VkGlfwOutput::createGraphicsPipeline(View& view) {
     view.graphicsPipelineBuilder.shaderStages.push_back(shaderStageInfo(vertexShader, VkShaderStageFlagBits::VK_SHADER_STAGE_VERTEX_BIT));
     view.graphicsPipelineBuilder.shaderStages.push_back(shaderStageInfo(fragmentShader, VkShaderStageFlagBits::VK_SHADER_STAGE_FRAGMENT_BIT));
 
+    VkPushConstantRange range;
+    range.offset = 0;
+    range.size = sizeof(MeshPushConstants);
+    range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
     VkPipelineLayoutCreateInfo pipelineLayoutInfo {};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     pipelineLayoutInfo.pNext = nullptr;
     pipelineLayoutInfo.setLayoutCount = 0;            // Optional
     pipelineLayoutInfo.pSetLayouts = nullptr;         // Optional
-    pipelineLayoutInfo.pushConstantRangeCount = 0;    // Optional
-    pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
+    pipelineLayoutInfo.pushConstantRangeCount = 1;    
+    pipelineLayoutInfo.pPushConstantRanges = &range; 
 
     if (vkCreatePipelineLayout(engine.device, &pipelineLayoutInfo, nullptr, &view.graphicsPipelineLayout) != VK_SUCCESS) {
         throw std::runtime_error("failed to create pipeline layout!");
@@ -296,13 +385,14 @@ void VkGlfwOutput::createFramebuffers() {
 
     for (size_t i = 0; i < swapChainImageViews.size(); i++) {
         VkImageView attachments[] = {
-            swapChainImageViews[i]
+            swapChainImageViews[i],
+            depthImageView
         };
 
         VkFramebufferCreateInfo framebufferInfo{};
         framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
         framebufferInfo.renderPass = view.renderPass;
-        framebufferInfo.attachmentCount = 1;
+        framebufferInfo.attachmentCount = 2;
         framebufferInfo.pAttachments = attachments;
         framebufferInfo.width = extent.width;
         framebufferInfo.height = extent.height;
@@ -330,43 +420,6 @@ void VkGlfwOutput::createCommandBuffers() {
     if (vkAllocateCommandBuffers(engine.device, &allocInfo, commandBuffers.data()) != VK_SUCCESS) {
         throw std::runtime_error("failed to allocate command buffers!");
     }
-
-    for (size_t i = 0; i < commandBuffers.size(); i++) {
-        VkCommandBufferBeginInfo beginInfo{};
-        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        beginInfo.flags = 0; // Optional
-        beginInfo.pInheritanceInfo = nullptr; // Optional
-
-        if (vkBeginCommandBuffer(commandBuffers[i], &beginInfo) != VK_SUCCESS) {
-            throw std::runtime_error("failed to begin recording command buffer!");
-        }
-
-        VkRenderPassBeginInfo renderPassInfo{};
-        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        renderPassInfo.renderPass = view.renderPass;
-        renderPassInfo.framebuffer = framebuffers[i];
-        renderPassInfo.renderArea.offset = {0, 0};
-        renderPassInfo.renderArea.extent = extent;
-
-        VkClearValue clearColor = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
-        renderPassInfo.clearValueCount = 1;
-        renderPassInfo.pClearValues = &clearColor;
-
-        vkCmdBeginRenderPass(commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-        vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, view.graphicsPipeline);
-
-        VkDeviceSize offsets[] = {0};
-        vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, &engine.meshes[0].vertexBuffer.buffer, offsets);
-
-        vkCmdDraw(commandBuffers[i], (uint32_t) engine.meshes[0].vertices.size(), 1, 0, 0);
-
-        vkCmdEndRenderPass(commandBuffers[i]);
-
-        if (vkEndCommandBuffer(commandBuffers[i]) != VK_SUCCESS) {
-            throw std::runtime_error("failed to record command buffer!");
-        }
-    }
 }
 
 void VkGlfwOutput::draw() {
@@ -382,6 +435,67 @@ void VkGlfwOutput::draw() {
     // Mark the image as now being in use by this frame
     imagesInFlight[imageIndex] = inFlightFences[currentFrame];
 
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT; 
+    beginInfo.pInheritanceInfo = nullptr; // Optional
+
+    VkClearValue depthClear;
+	depthClear.depthStencil.depth = 1.f;
+    VkClearValue clearValues[] = { view.clearColor, depthClear };
+
+    VkCommandBuffer& cmd = commandBuffers[imageIndex];
+
+    ImGui::Render();
+
+    glm::mat4 camView = glm::translate(glm::mat4(1.0f), view.cameraPos);
+    //camera projection
+    glm::mat4 projection = glm::perspective(glm::radians(view.fov.x), 1700.f / 900.f, 0.1f, 200.0f);
+    projection[1][1] *= -1;
+    //model rotation
+    glm::mat4 model = glm::rotate(glm::mat4(1.0f), glm::radians(glm::radians(view.fov.y)) , glm::vec3(0, 1, 0));
+
+    pushConstants.render_matrix = projection * camView * model;
+    pushConstants.offset = glm::vec4(1);
+
+    // ============== BEGIN COMMAND BUFFER ==============
+
+    if (vkBeginCommandBuffer(cmd, &beginInfo) != VK_SUCCESS) {
+        throw std::runtime_error("failed to begin recording command buffer!");
+    }
+
+    VkRenderPassBeginInfo renderPassInfo{};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    renderPassInfo.renderPass = view.renderPass;
+    renderPassInfo.framebuffer = framebuffers[imageIndex];
+    renderPassInfo.renderArea.offset = {0, 0};
+    renderPassInfo.renderArea.extent = extent;
+
+    renderPassInfo.clearValueCount = 2;
+    renderPassInfo.pClearValues = clearValues;
+
+    vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, view.graphicsPipeline);
+
+    VkDeviceSize offsets[] = {0};
+    vkCmdBindVertexBuffers(cmd, 0, 1, &engine.meshes[0].vertexBuffer.buffer, offsets);
+
+    vkCmdPushConstants(cmd, view.graphicsPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPushConstants), &pushConstants);
+
+    vkCmdDraw(cmd, (uint32_t) engine.meshes[0].vertices.size(), 1, 0, 0);
+    
+    // Record dear imgui primitives into command buffer
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
+
+    vkCmdEndRenderPass(cmd);
+
+    if (vkEndCommandBuffer(cmd) != VK_SUCCESS) {
+        throw std::runtime_error("failed to record command buffer!");
+    }
+
+    // ============== END COMMAND BUFFER ==============
+
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
@@ -392,7 +506,7 @@ void VkGlfwOutput::draw() {
     submitInfo.pWaitDstStageMask = waitStages;
 
     submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &commandBuffers[imageIndex];
+    submitInfo.pCommandBuffers = &cmd;
 
     VkSemaphore signalSemaphores[] = {renderFinishedSemaphores[currentFrame]};
     submitInfo.signalSemaphoreCount = 1;
@@ -465,3 +579,77 @@ void VkGlfwOutput::createSyncObjects() {
     }
 }
 
+void VkGlfwOutput::initImgui() {
+
+    // Imgui
+    ImGui_ImplGlfw_InitForVulkan(window, true);
+    ImGui_ImplVulkan_InitInfo init_info = {};
+    init_info.Instance = engine.vkInstance;
+    init_info.PhysicalDevice = engine.physicalDevice;
+    init_info.Device = engine.device;
+    init_info.QueueFamily = graphicsQueueFamily;
+    init_info.Queue = graphicsQueue;
+    init_info.PipelineCache = engine.pipelineCache;
+    init_info.DescriptorPool = engine.descriptorPool;
+    init_info.Subpass = 0;
+    init_info.MinImageCount = 2;
+    init_info.ImageCount = (uint32_t) swapChainImages.size();
+    init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+    init_info.Allocator = nullptr;
+    init_info.CheckVkResultFn = check_vk_result;
+    ImGui_ImplVulkan_Init(&init_info, view.renderPass);
+
+     // Upload Fonts
+    VkCommandBuffer commandBuffer;
+
+    VkCommandBufferAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.commandPool = engine.commandPool;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandBufferCount = 1;
+
+    if (vkAllocateCommandBuffers(engine.device, &allocInfo, &commandBuffer) != VK_SUCCESS) {
+        throw std::runtime_error("failed to allocate command buffers!");
+    }
+    
+    VkCommandBufferBeginInfo begin_info = {};
+    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    begin_info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    check_vk_result(vkBeginCommandBuffer(commandBuffer, &begin_info));
+
+    ImGui_ImplVulkan_CreateFontsTexture(commandBuffer);
+
+    VkSubmitInfo end_info = {};
+    end_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    end_info.commandBufferCount = 1;
+    end_info.pCommandBuffers = &commandBuffer;
+    check_vk_result(vkEndCommandBuffer(commandBuffer));
+    check_vk_result(vkQueueSubmit(graphicsQueue, 1, &end_info, VK_NULL_HANDLE));
+
+
+    check_vk_result(vkDeviceWaitIdle(engine.device));
+    vkFreeCommandBuffers(engine.device, engine.commandPool, 1, &commandBuffer);
+    ImGui_ImplVulkan_DestroyFontUploadObjects();
+
+    // Supply Imgui with a single empty frame so it does not crash
+    ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
+    ImGui::EndFrame();
+}
+
+void VkGlfwOutput::beginImguiFrame() {
+    // Start the Dear ImGui frame
+    ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
+    #ifdef _DEBUG
+        ImGui::ShowDemoWindow((bool*) true);    
+    #endif // DEBUG
+}
+
+void VkGlfwOutput::endImguiFrame() {
+    ImGui::EndFrame();
+}

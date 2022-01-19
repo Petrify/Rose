@@ -28,6 +28,7 @@ find_package(assimp CONFIG REQUIRED)
 
 add_subdirectory(assets)
 add_subdirectory(src/rendering/engine)
+add_subdirectory(src/logging)
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/src/rendering/shaders/compile_shaders.cmake)
 
@@ -45,17 +46,20 @@ add_library(VulkanEngine
 )
 
 target_link_libraries(VulkanEngine
-PUBLIC Vulkan::Vulkan 
-PRIVATE unofficial::vulkan-memory-allocator::vulkan-memory-allocator 
-PRIVATE glm::glm
-PRIVATE glfw
-PRIVATE spdlog::spdlog spdlog::spdlog_header_only
-PRIVATE assimp::assimp
+    PUBLIC Vulkan::Vulkan 
+    PUBLIC glfw
+    PUBLIC imgui::imgui
+    PRIVATE RoseLogging
+    PRIVATE unofficial::vulkan-memory-allocator::vulkan-memory-allocator 
+    PRIVATE glm::glm
+    PRIVATE spdlog::spdlog spdlog::spdlog_header_only
+    PRIVATE assimp::assimp
 )
 
 target_include_directories(VulkanEngine
-PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src
-PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/rendering/engine
+PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/rendering/engine/include
+PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
+PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/rendering/engine
 )
 
 add_executable(TestVulkanEngine
@@ -77,8 +81,10 @@ add_shaders(TestVulkanEngine
 
 # Add Executable File as Build target 
 add_executable(Rose
-    src/main.cpp
-    src/logging/logging.cpp
+    src/client/main.cpp
+    src/client/app.cpp
+    src/client/app.hpp
+    src/client/views/base.cpp
 )
 
 target_include_directories(Rose 
@@ -87,18 +93,18 @@ target_include_directories(Rose
 
 # Link Libraries
 target_link_libraries(Rose 
-    PRIVATE Vulkan::Vulkan 
+    PRIVATE RoseLogging
+    PRIVATE VulkanEngine
     PRIVATE unofficial::vulkan-memory-allocator::vulkan-memory-allocator
     PRIVATE glfw 
     PRIVATE glm::glm
     PRIVATE spdlog::spdlog spdlog::spdlog_header_only
     PRIVATE Bullet3Common BulletDynamics
-    PRIVATE imgui::imgui
 )
 
 # Vulkan Shader Dependencies
 add_shaders(Rose 
-    shader.vert 
-    shader.frag
+    triangle.frag
+    basic_mesh.vert
 ) 
 

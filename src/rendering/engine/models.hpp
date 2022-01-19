@@ -10,10 +10,17 @@
  */
 
 #pragma once
-#include "vk_mesh.hpp"
 #include <string>
 #include <set>
+#include <fstream>
+#include <memory>
+
+#include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
+#include <assimp/Importer.hpp>
+#include <assimp/mesh.h>
+
+#include "vk_mesh.hpp"
 
 struct Model {
     public:
@@ -27,8 +34,10 @@ class ModelManager {
     VmaAllocator allocator;
     
     public:
-    ModelManager(VmaAllocator alloc) : allocator(alloc) {}
+    ModelManager(VmaAllocator alloc, VkDevice device);
 
-    Model& loadModel(char* file);
-    std::set<Model> models;
+    void upload(Model& model);
+    std::shared_ptr<Model> load(std::string file);
+    std::set<std::shared_ptr<Model>> models;
 };
+

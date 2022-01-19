@@ -19,11 +19,15 @@
 #include <vulkan/vulkan.h>
 #include <glm/glm.hpp>
 #include <vk_mem_alloc.h>
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_vulkan.h> 
 
 // Local Dependencies
-#include "logging/logging.hpp"
+#include <RoseLogging.hpp>
 
 #include "vk_mesh.hpp"
+#include "models.hpp"
 #include "ve_types.hpp"
 
 #ifdef NDEBUG
@@ -32,10 +36,19 @@ const bool enableValidationLayers = false;
 const bool enableValidationLayers = true;
 #endif
 
+#ifdef _DEBUG
+#define IMGUI_VULKAN_DEBUG_REPORT
+#endif
+
 const std::vector<const char*> engineInstanceExtensions = {}; // Instance extensions required by the Engine
 const std::vector<const char*> engineDeviceExtensions = {}; // Device extensions required by the Engine
 
 typedef std::function<bool(const VkQueueFamilyProperties&, uint32_t, VkPhysicalDevice)> queueCriteriaFunc;
+
+struct AllocatedImage {
+    VkImage _image;
+    VmaAllocation _allocation;
+};
 
 class VulkanEngine
 {
@@ -47,7 +60,7 @@ public:
         "VK_LAYER_KHRONOS_validation"
     };
 
-    bool initialized;
+    bool initialized = false;
 
     // Logging
     Logger vkLogger;
@@ -65,9 +78,13 @@ public:
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     VkDevice device;
 
+    VkPipelineCache pipelineCache;
+    VkDescriptorPool descriptorPool;
+
     VmaAllocator allocator;
 
     std::vector<Mesh> meshes; 
+    std::unique_ptr<ModelManager> modelMan;
 
     std::vector<std::function<bool(VkPhysicalDevice)>> deviceReqCallbacks;
 
@@ -85,6 +102,8 @@ public:
 
     std::vector<Initializable*> postInitObjects;
 
+    ImGuiIO* imguiIO;
+
     std::vector<const char *> getInstanceExtensions();
 
     void createInstance();
@@ -94,6 +113,9 @@ public:
     void createCommandPool();
     void createVertexBuffer();
     void createMemoryAllocator();
+    void createDescriptorPool();
+    void createPipelineCache();
+    void initImgui();
     
     void loadMeshes();
     void uploadMesh(Mesh& mesh);
@@ -109,7 +131,7 @@ public:
     ~VulkanEngine();
 
     void init();
-    void detroy();
+    void destroy();
 
     void start();
     void stop();
@@ -130,7 +152,7 @@ public:
 
 bool isGraphicsFamily(const VkQueueFamilyProperties& prop); 
 
-
+void check_vk_result(VkResult err);
 
 
 

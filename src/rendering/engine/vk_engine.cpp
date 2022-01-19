@@ -1,3 +1,4 @@
+#include "vma_inc.hpp"
 #include "vk_engine.hpp"
 #include "ve_types.hpp"
 
@@ -12,10 +13,16 @@ VulkanEngine::VulkanEngine(std::set<std::string> instanceExtensions)
     createInstance();
     setupDebugMessenger();
     requestQueue([&] (const VkQueueFamilyProperties& prop, uint32_t idx, VkPhysicalDevice device) -> bool {return isGraphicsFamily(prop);}, &graphicsQueueFamily, &graphicsQueue);
+    
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    imguiIO = &ImGui::GetIO();
+    ImGui::StyleColorsDark();
 }
 
 VulkanEngine::~VulkanEngine()
 {
+    ImGui::DestroyContext();
     if (enableValidationLayers)
     {
         DestroyDebugUtilsMessengerEXT(vkInstance, debugMessenger, nullptr);
@@ -56,6 +63,9 @@ void VulkanEngine::init() {
     createLogicalDevice();
     createMemoryAllocator();
     createCommandPool();
+    createPipelineCache();
+    createDescriptorPool();
+    initImgui();
     loadMeshes();
 
     for(auto obj : postInitObjects)
@@ -64,7 +74,10 @@ void VulkanEngine::init() {
     }
 }
 
-void VulkanEngine::detroy() {
+void VulkanEngine::destroy() {
+
+    ImGui_ImplVulkan_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
 
     for(auto mesh : meshes)
     {
@@ -72,8 +85,8 @@ void VulkanEngine::detroy() {
     }
     vkDestroyCommandPool(device, commandPool, nullptr);
 
-    //vkDestroyBuffer(device, vertexBuffer, nullptr);
-    //vkFreeMemory(device, vertexBufferMemory, nullptr);
+    vkDestroyPipelineCache(device, pipelineCache, nullptr);
+    vkDestroyDescriptorPool(device, descriptorPool, nullptr);
 
     //for(auto output : outputs) {removeOutput(output);}
     vmaDestroyAllocator(allocator);
@@ -282,7 +295,7 @@ void VulkanEngine::createCommandPool()
     VkCommandPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     poolInfo.queueFamilyIndex = graphicsQueueFamily;
-    poolInfo.flags = 0; // Optional
+    poolInfo.flags |= VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT; // Optional
 
     if (vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS) {
         throw std::runtime_error("failed to create command pool!");
@@ -455,11 +468,12 @@ void VulkanEngine::createMemoryAllocator() {
 }
 
 void VulkanEngine::loadMeshes() {
-    meshes.push_back(Mesh(""));
-    Mesh& triangleMesh = meshes.back();
-    triangleMesh.vertices.resize(6);
+    modelMan = std::make_unique<ModelManager>(allocator, device);
 
-    uploadMesh(triangleMesh);
+    auto teapot = modelMan->load("../assets/teapot.obj");
+
+    meshes.push_back(teapot->mesh);
+    uploadMesh(meshes.back());
 }
 
 void VulkanEngine::uploadMesh(Mesh& mesh)
@@ -495,7 +509,52 @@ void VulkanEngine::uploadMesh(Mesh& mesh)
 	vmaUnmapMemory(allocator, mesh.vertexBuffer.allocation);
 }
 
+void VulkanEngine::createDescriptorPool() {
+    VkDescriptorPoolSize pool_sizes[] =
+    {
+        { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
+        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
+        { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
+        { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
+        { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
+        { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
+        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
+        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
+        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
+        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
+        { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
+    };
+    VkDescriptorPoolCreateInfo pool_info = {};
+    pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+    pool_info.maxSets = 1000 * IM_ARRAYSIZE(pool_sizes);
+    pool_info.poolSizeCount = (uint32_t)IM_ARRAYSIZE(pool_sizes);
+    pool_info.pPoolSizes = pool_sizes;
+    check_vk_result(vkCreateDescriptorPool(device, &pool_info, nullptr, &descriptorPool));
+}
+
+void VulkanEngine::createPipelineCache() {
+    VkPipelineCacheCreateInfo ci = {};
+    ci.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+    ci.flags = 0;
+
+    vkCreatePipelineCache(device, &ci, nullptr, &pipelineCache);
+}
+
 bool isGraphicsFamily(const VkQueueFamilyProperties& prop) {
     return prop.queueFlags & VK_QUEUE_GRAPHICS_BIT;
 }
 
+void check_vk_result(VkResult err)
+{
+    static auto logger = getLogger("VulkanEngine");
+    if (err == 0)
+        return;
+    logger->critical("Vulkan error: #{}", err);
+    if (err < 0)
+        abort();
+}
+
+void VulkanEngine::initImgui() {
+    
+}

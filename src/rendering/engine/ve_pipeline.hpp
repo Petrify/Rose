@@ -17,6 +17,7 @@ struct PipelineBuilder
 	VkPipelineColorBlendAttachmentState colorBlendAttachment;
 	VkPipelineColorBlendStateCreateInfo colorBlending;
 	VkPipelineMultisampleStateCreateInfo multisampling;
+	VkPipelineDepthStencilStateCreateInfo depthStencil;
 
 	PipelineBuilder() {}
 	~PipelineBuilder() {}

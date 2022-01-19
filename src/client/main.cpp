@@ -9,8 +9,12 @@
  * 
  */
 
+#include "app.hpp"
+
 int main(int argc, char const *argv[])
 {
-    
-    return 0;
+    App Rose;
+    Rose.run();
 }
+
+
