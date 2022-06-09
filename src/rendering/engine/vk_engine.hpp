@@ -14,6 +14,7 @@
 #include <string>
 #include <map>
 #include <functional> 
+#include <stack>
 
 // External Dependencies
 #include <vulkan/vulkan.h>
@@ -101,6 +102,7 @@ public:
     VkDeviceMemory vertexBufferMemory;
 
     std::vector<Initializable*> postInitObjects;
+    std::stack<std::function<void()>> destroyStack;
 
     ImGuiIO* imguiIO;
 
@@ -137,6 +139,8 @@ public:
     void stop();
 
     bool isInit();
+
+    void deferDestroy(std::function<void()> foo);
 
     void requestDeviceRequirement(std::function<bool(VkPhysicalDevice)> condition);
     void requestDeviceExtensions(std::set<std::string> extensions);

@@ -33,7 +33,6 @@ add_subdirectory(src/logging)
 include(${CMAKE_CURRENT_SOURCE_DIR}/src/rendering/shaders/compile_shaders.cmake)
 
 add_library(VulkanEngine
-    src/logging/logging.cpp
     src/rendering/engine/vk_engine.cpp
     src/rendering/engine/vk_mesh.cpp
     src/rendering/engine/vk_debug.cpp
@@ -43,6 +42,7 @@ add_library(VulkanEngine
     src/rendering/engine/output/vk_glfw_output.cpp
     src/rendering/engine/ve_loader.hpp
     src/rendering/engine/models.cpp
+    src/rendering/engine/logging.cpp
 )
 
 target_link_libraries(VulkanEngine

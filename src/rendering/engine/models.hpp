@@ -31,8 +31,7 @@ struct Model {
 
 class ModelManager {
     private:
-    VmaAllocator allocator;
-    
+    VmaAllocator allocator;    
     public:
     ModelManager(VmaAllocator alloc, VkDevice device);
 

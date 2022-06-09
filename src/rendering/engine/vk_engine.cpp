@@ -22,6 +22,11 @@ VulkanEngine::VulkanEngine(std::set<std::string> instanceExtensions)
 
 VulkanEngine::~VulkanEngine()
 {
+    while (!destroyStack.empty()) {
+        destroyStack.top()();
+        destroyStack.pop();
+    }
+    
     ImGui::DestroyContext();
     if (enableValidationLayers)
     {
@@ -507,6 +512,10 @@ void VulkanEngine::uploadMesh(Mesh& mesh)
 	memcpy(data, mesh.vertices.data(), mesh.vertices.size() * sizeof(Vertex));
 
 	vmaUnmapMemory(allocator, mesh.vertexBuffer.allocation);
+}
+
+void VulkanEngine::deferDestroy(std::function<void()> foo) {
+    destroyStack.push(foo);
 }
 
 void VulkanEngine::createDescriptorPool() {
